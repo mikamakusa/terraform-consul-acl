@@ -1,25 +1,3 @@
-## DATAS
-
-variable "auth_method_name" {
-  type    = string
-  default = null
-}
-
-variable "policy_name" {
-  type    = string
-  default = null
-}
-
-variable "role_name" {
-  type    = string
-  default = null
-}
-
-variable "accessor_id" {
-  type    = string
-  default = null
-}
-
 ## RESOURCES
 
 variable "auth_method" {
@@ -27,7 +5,7 @@ variable "auth_method" {
     id             = any
     name           = string
     type           = string
-    config_json    = optional(string)
+    config_json    = optional(map(string))
     description    = optional(string)
     display_name   = optional(string)
     max_token_ttl  = optional(string)
@@ -79,7 +57,7 @@ variable "role" {
     description = optional(string)
     namespace   = optional(string)
     partition   = optional(string)
-    policies_id = optional(list(any))
+    policies_id = optional(list(number))
     node_identities = optional(list(object({
       datacenter = string
       node_name  = string

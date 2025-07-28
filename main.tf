@@ -2,7 +2,7 @@ resource "consul_acl_auth_method" "this" {
   count          = length(var.auth_method)
   name           = lookup(var.auth_method[count.index], "name")
   type           = lookup(var.auth_method[count.index], "type")
-  config_json    = lookup(var.auth_method[count.index], "config_json")
+  config_json    = jsonencode(lookup(var.auth_method[count.index], "config_json"))
   description    = lookup(var.auth_method[count.index], "description")
   display_name   = lookup(var.auth_method[count.index], "display_name")
   max_token_ttl  = lookup(var.auth_method[count.index], "max_token_ttl")
@@ -20,8 +20,8 @@ resource "consul_acl_auth_method" "this" {
 }
 
 resource "consul_acl_binding_rule" "this" {
-  count       = (length(var.auth_method) || var.auth_method_name) == 0 ? 0 : length(var.binding_rule)
-  auth_method = var.auth_method_name ? data.consul_acl_auth_method.this.name : element(consul_acl_auth_method.this.*.name, lookup(var.binding_rule[count.index], "auth_method_id"))
+  count       = length(var.auth_method) == 0 ? 0 : length(var.binding_rule)
+  auth_method = element(consul_acl_auth_method.this.*.name, lookup(var.binding_rule[count.index], "auth_method_id"))
   bind_name   = lookup(var.binding_rule[count.index], "bind_name")
   bind_type   = lookup(var.binding_rule[count.index], "bind_type")
   description = lookup(var.binding_rule[count.index], "description")
@@ -40,7 +40,7 @@ resource "consul_acl_binding_rule" "this" {
 resource "consul_acl_policy" "this" {
   count       = length(var.policy)
   name        = lookup(var.policy[count.index], "name")
-  rules       = lookup(var.policy[count.index], "rules")
+  rules       = format("<<-RULE %s RULE", lookup(var.policy[count.index], "rules"))
   description = lookup(var.policy[count.index], "description")
   datacenters = lookup(var.policy[count.index], "datacenters")
   namespace   = lookup(var.policy[count.index], "namespace")
@@ -53,7 +53,7 @@ resource "consul_acl_role" "this" {
   description = lookup(var.role[count.index], "description")
   namespace   = lookup(var.role[count.index], "namespace")
   partition   = lookup(var.role[count.index], "partition")
-  policies    = var.policy_name ? data.consul_acl_policy.this.id : element(consul_acl_policy.this.*.id, lookup(var.role[count.index], "policies_id"))
+  policies    = [consul_acl_policy.this.*.id[lookup(var.role[count.index], "policies_id")]]
 
   dynamic "node_identities" {
     for_each = try(lookup(var.role[count.index], "node_identities") == null ? [] : ["node_identities"])
@@ -88,9 +88,9 @@ resource "consul_acl_role" "this" {
 }
 
 resource "consul_acl_role_policy_attachment" "this" {
-  count   = ((length(var.policy) || var.policy_name) && (length(var.role) || var.role_name)) == 0 ? 0 : length(var.role_policy_attachment)
-  policy  = var.policy_name ? data.consul_acl_policy.this.name : element(consul_acl_policy.this.*.name, lookup(var.role_policy_attachment[count.index], "policy_id"))
-  role_id = var.role_name ? data.consul_acl_role.this.id : element(consul_acl_role.this.*.id, lookup(var.role_policy_attachment[count.index], "role_id"))
+  count   = length(var.role)  == 0 ? 0 : length(var.role_policy_attachment)
+  policy  = element(consul_acl_policy.this.*.name, lookup(var.role_policy_attachment[count.index], "policy_id"))
+  role_id = element(consul_acl_role.this.*.id, lookup(var.role_policy_attachment[count.index], "role_id"))
 }
 
 resource "consul_acl_token" "this" {
@@ -101,8 +101,8 @@ resource "consul_acl_token" "this" {
   local           = lookup(var.token[count.index], "local")
   namespace       = lookup(var.token[count.index], "namespace")
   partition       = lookup(var.token[count.index], "partition")
-  policies        = try(var.policy_name ? data.consul_acl_policy.this.name : element(consul_acl_policy.this.*.name, lookup(var.token[count.index], "policies_id")))
-  roles           = try(var.role_name ? data.consul_acl_role.this.name : element(consul_acl_role.this.*.name, lookup(var.token[count.index], "roles_id")))
+  policies        = consul_acl_policy.this.*.name[lookup(var.token[count.index], "policies_id")]
+  roles           = consul_acl_role.this.*.name[lookup(var.token[count.index], "roles_id")]
 
   dynamic "node_identities" {
     for_each = try(lookup(var.token[count.index], "node_identities") == null ? [] : ["node_identities"])
@@ -137,13 +137,13 @@ resource "consul_acl_token" "this" {
 }
 
 resource "consul_acl_token_policy_attachment" "this" {
-  count    = ((length(var.token) || var.accessor_id) && (length(var.policy) || var.policy_name)) == 0 ? 0 : length(var.token_policy_attachment)
-  policy   = try(var.policy_name ? data.consul_acl_policy.this.name : element(consul_acl_policy.this.*.name, lookup(var.token_policy_attachment[count.index], "policy_id")))
-  token_id = try(var.accessor_id ? data.consul_acl_token.this.id : element(consul_acl_token.this.*.id, lookup(var.token_policy_attachment[count.index], "token_id")))
+  count    = length(var.policy) == 0 ? 0 : length(var.token_policy_attachment)
+  policy   = element(consul_acl_policy.this.*.name, lookup(var.token_policy_attachment[count.index], "policy_id"))
+  token_id = element(consul_acl_token.this.*.id, lookup(var.token_policy_attachment[count.index], "token_id"))
 }
 
 resource "consul_acl_token_role_attachment" "this" {
-  count    = ((length(var.token) || var.accessor_id) && (length(var.role) || var.role_name)) == 0 ? 0 : length(var.token_role_attachment)
-  role     = try(var.role_name ? data.consul_acl_role.this.id : element(consul_acl_role.this.*.id, lookup(var.token_role_attachment[count.index], "role_id")))
-  token_id = try(var.accessor_id ? data.consul_acl_token.this.id : element(consul_acl_token.this.*.id, lookup(var.token_role_attachment[count.index], "token_id")))
+  count    = length(var.role) == 0 ? 0 : length(var.token_role_attachment)
+  role     = element(consul_acl_role.this.*.id, lookup(var.token_role_attachment[count.index], "role_id"))
+  token_id = element(consul_acl_token.this.*.id, lookup(var.token_role_attachment[count.index], "token_id"))
 }
